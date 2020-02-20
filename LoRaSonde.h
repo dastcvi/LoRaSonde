@@ -12,15 +12,10 @@
 #ifndef LORASONDE_H
 #define LORASONDE_H
 
-#include "RH_RF95.h"
+#include "LoRaSondeLink.h"
 #include <Arduino.h>
 
 #define INST_SERIAL SerialUSB
-
-// configuration defaults
-#define DEFAULT_FREQUENCY       915 // MHz
-#define DEFAULT_TXPOWER         23
-#define DEFAULT_MODEMCONFIG     RH_RF95::Bw31_25Cr48Sf512
 
 class LoRaSonde {
 public:
@@ -33,12 +28,14 @@ public:
     RH_RF95 rf95;
 
 private:
-    void ListenInstrument();
+    bool ListenInstrument();
+    bool ListeniMet();
+    void SendPacket();
 
     // ascii buffers
-    char xdata_ascii[128] = {0};
-    char ptux_buffer[128] = {0};
-    char gps_buffer[128] = {0};
+    char xdata_ascii[512] = {0};
+    char ptux_buffer[512] = {0};
+    char gps_buffer[512] = {0};
 
     // ascii buffer pointers
     uint8_t xdata_len = 0;
@@ -46,8 +43,8 @@ private:
     uint8_t gps_len = 0;
 
     // tx binary buffer
-    uint8_t bin_buffer[64] = {0};
-    uint8_t bin_len = 0;
+    uint8_t tx_buf[RH_RF95_MAX_MESSAGE_LEN] = {0};
+    uint8_t tx_len = 0;
 
     const int LED_PIN = 13;
 

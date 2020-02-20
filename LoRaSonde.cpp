@@ -41,24 +41,24 @@ void LoRaSonde::Initialize()
 
 void LoRaSonde::Run()
 {
-    ListenInstrument();
+    if (ListenInstrument()) SendPacket();
+    if (ListeniMet()) SendPacket();
 }
 
-void LoRaSonde::ListenInstrument()
+bool LoRaSonde::ListenInstrument()
 {
     static char header[7] = {0};
     static char hex_read[3] = {0};
     static unsigned long timeout = 0;
 
-    // reset the buffers
+    // reset the xdata buffer length
     xdata_len = 0;
-    bin_len = 0;
 
     // wait for an 'x'
     while (INST_SERIAL.available() && 'x' != INST_SERIAL.peek()) INST_SERIAL.read();
 
     // if we didn't get an 'x', return
-    if ('x' != (header[0] = INST_SERIAL.read())) return;
+    if ('x' != (header[0] = INST_SERIAL.read())) return false;
 
     // listen for the rest of the header "xdata="
     timeout = millis() + 200;
@@ -66,7 +66,7 @@ void LoRaSonde::ListenInstrument()
         while (!INST_SERIAL.available()) {
             if (millis() > timeout) {
                 INST_SERIAL.flush();
-                return;
+                return false;
             }
         }
 
@@ -76,14 +76,14 @@ void LoRaSonde::ListenInstrument()
     // if we didn't get a good header, flush and return
     if (0 != strcmp(header, "xdata=")) {
         INST_SERIAL.flush();
-        return;
+        return false;
     }
 
     // get the message
     while ('\r' != (char) INST_SERIAL.peek() && '\n' != (char) INST_SERIAL.peek()) {
         if (millis() > timeout) {
             INST_SERIAL.flush();
-            return;
+            return false;
         }
 
         if (INST_SERIAL.available()) {
@@ -94,17 +94,42 @@ void LoRaSonde::ListenInstrument()
     // make sure we have an even number of bytes in the packet
     if (0 != xdata_len % 2) {
         SerialUSB.println("Bad packet");
+        return false;
+    }
+
+    // prepare to write the packet to the TX buffer
+    tx_len = xdata_len/2 + 1; // protocol byte at start
+    tx_buf[0] = LORA_XDATA;
+
+    // convert the "ASCII-encoded hex" to uint8s
+    for (int i = 1; i < tx_len; i++) {
+        hex_read[0] = xdata_ascii[2*i-2];
+        hex_read[1] = xdata_ascii[2*i-1];
+
+        tx_buf[i] = (uint8_t) strtoul(hex_read, 0, 16);
+    }
+
+    // signal that a packet has been received and parsed
+    return true;
+}
+
+bool LoRaSonde::ListeniMet()
+{
+    return false;
+}
+
+void LoRaSonde::SendPacket()
+{
+    unsigned long tx_timer = millis();
+
+    if (!rf95.send(tx_buf, tx_len)) {
+        SerialUSB.println("Send error");
         return;
     }
 
-    // convert the "ASCII-encoded hex" to uint8s
-    bin_len = xdata_len/2;
-    for (int i = 0; i < bin_len; i++) {
-        hex_read[0] = xdata_ascii[2*i];
-        hex_read[1] = xdata_ascii[2*i+1];
+    rf95.waitPacketSent();
 
-        bin_buffer[i] = (uint8_t) strtoul(hex_read, 0, 16);
-    }
-
-    // TODO: Send packet here
+    SerialUSB.print("Packet sent in ");
+    SerialUSB.print(millis() - tx_timer);
+    SerialUSB.println(" ms");
 }

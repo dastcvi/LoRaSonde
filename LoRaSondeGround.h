@@ -36,11 +36,6 @@ private:
 
     const int LED_PIN = 13;
 
-    // configuration variables
-    float frequency = DEFAULT_FREQUENCY;
-    int8_t tx_power = DEFAULT_TXPOWER;
-    RH_RF95::ModemConfigChoice modem_config = DEFAULT_MODEMCONFIG;
-
 };
 
 #endif /* LORASONDEGROUND_H */

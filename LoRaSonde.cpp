@@ -31,10 +31,10 @@ void LoRaSonde::Initialize()
         }
     }
 
-    // Set frequency
+    // Set link parameters (variables defined in LoRaSondeLink)
     rf95.setFrequency(frequency);
     rf95.setTxPower(tx_power, false);
-    rf95.setModemConfig(modem_config);
+    rf95.setModemRegisters(&modem_config);
 
     digitalWrite(LED_PIN, HIGH);
 }

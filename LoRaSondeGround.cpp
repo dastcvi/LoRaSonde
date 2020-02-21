@@ -61,11 +61,14 @@ void LoRaSondeGround::Run()
 
 void LoRaSondeGround::PrintXDATA()
 {
+    char hex_str[3] = {0};
+
     OUTPUT_SERIAL.print("xdata=");
 
     // print all but the first (protocol) byte as ASCII hex
     for (int i = 1; i < rx_len; i++) {
-        OUTPUT_SERIAL.print(rx_buf[i], HEX);
+        sprintf(hex_str, "%02X", rx_buf[i]);
+        OUTPUT_SERIAL.print(hex_str);
     }
 
     OUTPUT_SERIAL.println();

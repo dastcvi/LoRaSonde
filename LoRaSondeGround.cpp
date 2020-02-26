@@ -9,6 +9,7 @@
  */
 
 #include "LoRaSondeGround.h"
+#include "Serialize.h" // from SerialComm library
 
 LoRaSondeGround::LoRaSondeGround()
     : rf95(12, 6) // defined by Pro RF hardware
@@ -40,23 +41,99 @@ void LoRaSondeGround::Run()
 {
     if (!rf95.available()) return;
 
-    rx_len = RH_RF95_MAX_MESSAGE_LEN;
-    if (!rf95.recv(rx_buf, &rx_len)) {
+    // set to the buffer size for recv, which will set to actual size
+    receive_size = RH_RF95_MAX_MESSAGE_LEN;
+
+    if (!rf95.recv(rx_buf, &receive_size)) {
         OUTPUT_SERIAL.println("Packet error");
         return;
     }
 
-    switch (rx_buf[0])
-    {
-    case LORA_XDATA:
-        PrintXDATA();
-        break;
-    case LORA_PTUX:
-    case LORA_GPS:
-    default:
-        OUTPUT_SERIAL.println("Unknown packet type");
-        break;
+    // reset the index for message printing
+    rx_index = 0;
+
+    // if an iMet is connected to the LoRaSonde, print that data
+    if (iMet) {
+        if (!PrintPTUX() || !PrintGPS()) {
+            OUTPUT_SERIAL.println("Message error");
+        }
     }
+
+    PrintXDATA();
+}
+
+bool LoRaSondeGround::PrintPTUX()
+{
+    float temp;
+
+    OUTPUT_SERIAL.print("PTUX: ");
+
+    // deserialize and print P
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print T
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print U
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print X
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.println("\r");
+
+    return true;
+}
+
+bool LoRaSondeGround::PrintGPS()
+{
+    float temp;
+    uint8_t temp_u;
+
+    OUTPUT_SERIAL.print("GPS: ");
+
+    // deserialize and print lat
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print lon
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print alt
+    if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print qual
+    if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(", ");
+
+    // deserialize and print hours
+    if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(":");
+
+    // deserialize and print minutes
+    if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(":");
+
+    // deserialize and print seconds
+    if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.println("\r");
+
+    return true;
 }
 
 void LoRaSondeGround::PrintXDATA()
@@ -66,10 +143,10 @@ void LoRaSondeGround::PrintXDATA()
     OUTPUT_SERIAL.print("xdata=");
 
     // print all but the first (protocol) byte as ASCII hex
-    for (int i = 1; i < rx_len; i++) {
-        sprintf(hex_str, "%02X", rx_buf[i]);
+    while (rx_index < receive_size) {
+        sprintf(hex_str, "%02X", rx_buf[rx_index++]);
         OUTPUT_SERIAL.print(hex_str);
     }
 
-    OUTPUT_SERIAL.println();
+    OUTPUT_SERIAL.println("\r");
 }

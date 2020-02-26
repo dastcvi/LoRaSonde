@@ -10,6 +10,7 @@
  */
 
 #include "LoRaSonde.h"
+#include "Serialize.h" // from SerialComm library
 
 LoRaSonde::LoRaSonde()
     : rf95(12, 6) // defined by Pro RF hardware
@@ -20,6 +21,8 @@ void LoRaSonde::Initialize()
     SerialUSB.begin(115200);
     INST_SERIAL.begin(9600);
     INST_SERIAL.setTimeout(100);
+    IMET_SERIAL.begin(9600);
+    IMET_SERIAL.setTimeout(100);
     pinMode(LED_PIN, OUTPUT);
 
     //Initialize the Radio.
@@ -42,17 +45,16 @@ void LoRaSonde::Initialize()
 void LoRaSonde::Run()
 {
     if (ListenInstrument()) SendPacket();
-    if (ListeniMet()) SendPacket();
+    if (iMet) ListeniMet();
 }
 
 bool LoRaSonde::ListenInstrument()
 {
-    static char header[7] = {0};
-    static char hex_read[3] = {0};
-    static unsigned long timeout = 0;
-
-    // reset the xdata buffer length
-    xdata_len = 0;
+    char header[7] = {0};
+    char hex_read[3] = {0};
+    unsigned long timeout = 0;
+    uint16_t xdata_len = 0;
+    uint8_t xdata_base = 0;
 
     // wait for an 'x'
     while (INST_SERIAL.available() && 'x' != INST_SERIAL.peek()) INST_SERIAL.read();
@@ -87,7 +89,7 @@ bool LoRaSonde::ListenInstrument()
         }
 
         if (INST_SERIAL.available()) {
-            xdata_ascii[xdata_len++] = (char) INST_SERIAL.read();
+            ascii_buf[xdata_len++] = (char) INST_SERIAL.read();
         }
     }
 
@@ -97,39 +99,203 @@ bool LoRaSonde::ListenInstrument()
         return false;
     }
 
-    // prepare to write the packet to the TX buffer
-    tx_len = xdata_len/2 + 1; // protocol byte at start
-    tx_buf[0] = LORA_XDATA;
+    // refresh the tx buffer
+    tx_len = 0;
+
+    // if an iMet is connected, add the most recent data to the packet
+    if (iMet) {
+        WriteiMetToPacket();
+    }
+
+    // buffer base address for the xdata
+    xdata_base = tx_len;
+
+    // ensure that the packet isn't too big
+    if (RH_RF95_MAX_MESSAGE_LEN < tx_len + xdata_len/2) return false;
+
+    // update the transmit size with the xdata length
+    tx_len += xdata_len/2;
 
     // convert the "ASCII-encoded hex" to uint8s
-    for (int i = 1; i < tx_len; i++) {
-        hex_read[0] = xdata_ascii[2*i-2];
-        hex_read[1] = xdata_ascii[2*i-1];
+    for (uint16_t i = 0; i < xdata_len/2; i++) {
+        hex_read[0] = ascii_buf[2*i];
+        hex_read[1] = ascii_buf[2*i+1];
 
-        tx_buf[i] = (uint8_t) strtoul(hex_read, 0, 16);
+        tx_buf[xdata_base + i] = (uint8_t) strtoul(hex_read, 0, 16);
     }
 
     // signal that a packet has been received and parsed
     return true;
 }
 
-bool LoRaSonde::ListeniMet()
+void LoRaSonde::ListeniMet()
 {
-    return false;
+    char header[7] = {0};
+    uint8_t header_len = 0;
+    unsigned long timeout = 0;
+
+    // wait for a 'P' or 'G'
+    while (IMET_SERIAL.available() && 'P' != IMET_SERIAL.peek() && 'G' != IMET_SERIAL.peek()) IMET_SERIAL.read();
+
+    // if we didn't get a 'P' or 'G', return
+    header[0] = IMET_SERIAL.read();
+    if ('P' != header[0] && 'G' != header[0]) return;
+
+    // listen for the rest of the header "PTUX: " or "GPS: "
+    header_len = ('P' == header[0]) ? 6 : 5;
+    timeout = millis() + 200;
+    for (int i = 1; i < header_len; i++) {
+        while (!IMET_SERIAL.available()) {
+            if (millis() > timeout) {
+                IMET_SERIAL.flush();
+                return;
+            }
+        }
+
+        header[i] = IMET_SERIAL.read();
+    }
+
+    // now parse the right message if correct, otherwise flush
+    if (0 == strcmp(header, "PTUX: ")) {
+        ReadPTUX(timeout);
+    } else if (0 == strcmp(header, "GPS: ")) {
+        ReadGPS(timeout);
+    } else {
+        INST_SERIAL.flush();
+    }
+}
+
+void LoRaSonde::WriteiMetToPacket()
+{
+    // PTUX
+    BufferAddFloat(ptux.p, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddFloat(ptux.t, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddFloat(ptux.u, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddFloat(ptux.x, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+
+    // GPS
+    BufferAddFloat(gps.lat,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddFloat(gps.lon,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddFloat(gps.alt,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddUInt8(gps.qual, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddUInt8(gps.hour, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddUInt8(gps.min,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
+    BufferAddUInt8(gps.sec,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
 }
 
 void LoRaSonde::SendPacket()
 {
-    unsigned long tx_timer = millis();
+    // ensure that the transmitter is free before sending
+    rf95.waitPacketSent();
 
+    // attempt to send the packet
     if (!rf95.send(tx_buf, tx_len)) {
         SerialUSB.println("Send error");
         return;
     }
 
-    rf95.waitPacketSent();
+    SerialUSB.println("Sent packet");
+}
 
-    SerialUSB.print("Packet sent in ");
-    SerialUSB.print(millis() - tx_timer);
-    SerialUSB.println(" ms");
+void LoRaSonde::ReadPTUX(unsigned long timeout)
+{
+    char param[8] = "";
+
+    // get P
+    if (!ReadChars(timeout, param, 7, ',')) return;
+    ptux.p = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get T
+    if (!ReadChars(timeout, param, 7, ',')) return;
+    ptux.t = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get U
+    if (!ReadChars(timeout, param, 7, ',')) return;
+    ptux.u = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get X
+    if (!ReadChars(timeout, param, 7, '\r', '\n')) return;
+    ptux.x = strtof(param, NULL);
+
+    SerialUSB.println("PTUX");
+}
+
+void LoRaSonde::ReadGPS(unsigned long timeout)
+{
+    char param[12] = "";
+
+    // get lat
+    if (!ReadChars(timeout, param, 11, ',')) return;
+    gps.lat = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get lon
+    if (!ReadChars(timeout, param, 11, ',')) return;
+    gps.lon = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get alt
+    if (!ReadChars(timeout, param, 11, ',')) return;
+    gps.alt = strtof(param, NULL);
+    if (!WaitSpace(timeout)) return;
+
+    // get qual
+    if (!ReadChars(timeout, param, 3, ',')) return;
+    gps.qual = strtoul(param, 0, 10);
+    if (!WaitSpace(timeout)) return;
+
+    // get hours
+    if (!ReadChars(timeout, param, 3, ':')) return;
+    gps.hour = strtoul(param, 0, 10);
+
+    // get mins
+    if (!ReadChars(timeout, param, 3, ':')) return;
+    gps.min = strtoul(param, 0, 10);
+
+    // get secs
+    if (!ReadChars(timeout, param, 3, '\r', '\n')) return;
+    gps.sec = strtoul(param, 0, 10);
+
+    SerialUSB.println("GPS");
+}
+
+inline bool LoRaSonde::ReadChars(unsigned long timeout, char * buffer, uint8_t n, char delim, char delim2)
+{
+    // read up to n bytes
+    for (uint8_t i = 0; i < n; i++) {
+        // wait for a byte to be available unless the timeout is reached
+        while (!IMET_SERIAL.available()) {
+            if (millis() > timeout) {
+                IMET_SERIAL.flush();
+                return false;
+            }
+        }
+
+        // check if the next character is one of our desired delimiters
+        if (delim == IMET_SERIAL.peek() || delim2 == IMET_SERIAL.peek()) {
+            IMET_SERIAL.read(); // clear the char
+            return true;
+        }
+
+        // add the character to the buffer
+        buffer[i] = IMET_SERIAL.read();
+    }
+
+    // if we made it here, the delimiter was never reached
+    return false;
+}
+
+inline bool LoRaSonde::WaitSpace(unsigned long timeout)
+{
+    while (!IMET_SERIAL.available()) {
+        if (millis() > timeout) {
+            IMET_SERIAL.flush();
+            return false;
+        }
+    }
+
+    return (' ' == IMET_SERIAL.read());
 }

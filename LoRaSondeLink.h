@@ -8,13 +8,6 @@
 
 #include "RH_RF95.h"
 
-// message types for sonde -> ground communication, stored as first byte
-enum LoRaSondeMessage_t : uint8_t {
-    LORA_XDATA,
-    LORA_PTUX,
-    LORA_GPS
-};
-
 // valid transmit powers
 enum LoRaTXPower_t : uint8_t {
     TX_5dBm  = 5,
@@ -35,7 +28,8 @@ enum LoRaTXPower_t : uint8_t {
     TX_20dBm,
     TX_21dBm,
     TX_22dBm,
-    TX_23dBm
+    TX_23dBm,
+    TX_MAX_POWER = TX_23dBm
 };
 
 // valid bandwidth settings (in kHz)
@@ -71,10 +65,32 @@ enum LoRaSpreadingFactor_t : uint8_t {
     SF_12
 };
 
+// iMet PTUX
+struct PTUX_t {
+    float p;
+    float t;
+    float u;
+    float x;
+};
+
+// iMet GPS
+struct GPS_t {
+    float lat;
+    float lon;
+    float alt;
+    uint8_t qual;
+    uint8_t hour;
+    uint8_t min;
+    uint8_t sec;
+};
+
 // link configuration variables
 extern RH_RF95::ModemConfig modem_config;
 extern float frequency;
 extern LoRaTXPower_t tx_power;
+
+// signifies if an iMet is connected to the LoRaSonde
+extern bool iMet;
 
 // modem config requires constructing register bytes
 void SetModemConfig(LoRaBandwidth_t bw_in, LoRaCodingRate_t cr_in, LoRaSpreadingFactor_t sf_in);

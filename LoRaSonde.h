@@ -16,6 +16,7 @@
 #include <Arduino.h>
 
 #define INST_SERIAL SerialUSB
+#define IMET_SERIAL Serial1
 
 class LoRaSonde {
 public:
@@ -29,22 +30,27 @@ public:
 
 private:
     bool ListenInstrument();
-    bool ListeniMet();
+    void ListeniMet();
+
+    void ReadPTUX(unsigned long timeout);
+    void ReadGPS(unsigned long timeout);
+
+    bool ReadChars(unsigned long timeout, char * buffer, uint8_t n, char delim, char delim2 = '\0');
+    bool WaitSpace(unsigned long timeout);
+
+    void WriteiMetToPacket();
     void SendPacket();
 
-    // ascii buffers
-    char xdata_ascii[512] = {0};
-    char ptux_buffer[512] = {0};
-    char gps_buffer[512] = {0};
+    // iMet data structs
+    PTUX_t ptux = {0};
+    GPS_t gps = {0};
 
-    // ascii buffer pointers
-    uint8_t xdata_len = 0;
-    uint8_t ptux_len = 0;
-    uint8_t gps_len = 0;
+    // ascii buffer
+    char ascii_buf[512] = {0};
 
     // tx binary buffer
     uint8_t tx_buf[RH_RF95_MAX_MESSAGE_LEN] = {0};
-    uint8_t tx_len = 0;
+    uint16_t tx_len = 0;
 
     const int LED_PIN = 13;
 

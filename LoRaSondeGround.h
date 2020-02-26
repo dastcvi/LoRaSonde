@@ -27,12 +27,13 @@ public:
     RH_RF95 rf95;
 
 private:
+    bool PrintPTUX();
+    bool PrintGPS();
     void PrintXDATA();
-    void PrintPTUX();
-    void PrintGPS();
 
     uint8_t rx_buf[RH_RF95_MAX_MESSAGE_LEN];
-    uint8_t rx_len = RH_RF95_MAX_MESSAGE_LEN;
+    uint8_t receive_size = RH_RF95_MAX_MESSAGE_LEN;
+    uint16_t rx_index = 0;
 
     const int LED_PIN = 13;
 

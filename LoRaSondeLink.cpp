@@ -13,6 +13,9 @@ RH_RF95::ModemConfig modem_config = {0x72, 0x74, 0x00}; // chip default
 float frequency = 915;
 LoRaTXPower_t tx_power = TX_23dBm;
 
+// is an iMet connected to the LoRaSonde?
+bool iMet = false;
+
 void SetModemConfig(LoRaBandwidth_t bw_in, LoRaCodingRate_t cr_in, LoRaSpreadingFactor_t sf_in)
 {
     modem_config.reg_1d = (bw_in << 4) | (cr_in << 1);

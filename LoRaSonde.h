@@ -13,10 +13,21 @@
 #define LORASONDE_H
 
 #include "LoRaSondeLink.h"
+#include "SERCOM.h"
+#include "UART.h"
+#include "wiring_private.h"
 #include <Arduino.h>
 
-#define INST_SERIAL SerialUSB
-#define IMET_SERIAL Serial1
+// choose the serial ports for each stream
+#define INST_SERIAL Serial1
+#define IMET_SERIAL Serial2
+
+// we need to configure the SERCOM module for the iMet serial
+#define IMET_TX           2  /* PA14, 2.2 */
+#define IMET_RX           5  /* PA15, 2.3 */
+#define IMET_TX_PAD       (UART_TX_PAD_2)
+#define IMET_RX_PAD       (SERCOM_RX_PAD_3)
+#define IMET_SERCOM       (&sercom2)
 
 class LoRaSonde {
 public:

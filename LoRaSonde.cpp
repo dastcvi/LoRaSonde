@@ -12,6 +12,14 @@
 #include "LoRaSonde.h"
 #include "Serialize.h" // from SerialComm library
 
+// configure the IMET SERCOM
+Uart Serial2(IMET_SERCOM, IMET_RX, IMET_TX, IMET_RX_PAD, IMET_TX_PAD);
+
+void SERCOM2_Handler()
+{
+  Serial2.IrqHandler();
+}
+
 LoRaSonde::LoRaSonde()
     : rf95(12, 6) // defined by Pro RF hardware
 { }
@@ -24,6 +32,9 @@ void LoRaSonde::Initialize()
     IMET_SERIAL.begin(9600);
     IMET_SERIAL.setTimeout(100);
     pinMode(LED_PIN, OUTPUT);
+
+    pinPeripheral(IMET_TX, PIO_SERCOM);
+    pinPeripheral(IMET_RX, PIO_SERCOM);
 
     //Initialize the Radio.
     if (!rf95.init()) {
@@ -244,20 +255,20 @@ void LoRaSonde::ReadGPS(unsigned long timeout)
 
     // get qual
     if (!ReadChars(timeout, param, 3, ',')) return;
-    gps.qual = strtoul(param, 0, 10);
+    gps.qual = strtoul(param, NULL, 10);
     if (!WaitSpace(timeout)) return;
 
     // get hours
     if (!ReadChars(timeout, param, 3, ':')) return;
-    gps.hour = strtoul(param, 0, 10);
+    gps.hour = strtoul(param, NULL, 10);
 
     // get mins
     if (!ReadChars(timeout, param, 3, ':')) return;
-    gps.min = strtoul(param, 0, 10);
+    gps.min = strtoul(param, NULL, 10);
 
     // get secs
     if (!ReadChars(timeout, param, 3, '\r', '\n')) return;
-    gps.sec = strtoul(param, 0, 10);
+    gps.sec = strtoul(param, NULL, 10);
 
     SerialUSB.println("GPS");
 }

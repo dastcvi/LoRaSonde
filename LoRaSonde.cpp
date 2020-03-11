@@ -179,12 +179,14 @@ void LoRaSonde::ListeniMet()
 void LoRaSonde::WriteiMetToPacket()
 {
     // PTUX
+    BufferAddUInt16(ptux.deciseconds, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(ptux.p, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(ptux.t, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(ptux.u, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(ptux.x, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
 
     // GPS
+    BufferAddUInt16(gps.deciseconds, tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(gps.lat,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(gps.lon,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
     BufferAddFloat(gps.alt,  tx_buf, RH_RF95_MAX_MESSAGE_LEN, &tx_len);
@@ -231,6 +233,8 @@ void LoRaSonde::ReadPTUX(unsigned long timeout)
     if (!ReadChars(timeout, param, 7, '\r', '\n')) return;
     ptux.x = strtof(param, NULL);
 
+    ptux.deciseconds = (uint16_t) (millis() / 100);
+
     SerialUSB.println("PTUX");
 }
 
@@ -269,6 +273,8 @@ void LoRaSonde::ReadGPS(unsigned long timeout)
     // get secs
     if (!ReadChars(timeout, param, 3, '\r', '\n')) return;
     gps.sec = strtoul(param, NULL, 10);
+
+    gps.deciseconds = (uint16_t) (millis() / 100);
 
     SerialUSB.println("GPS");
 }

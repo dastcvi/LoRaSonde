@@ -65,8 +65,15 @@ void LoRaSondeGround::Run()
 bool LoRaSondeGround::PrintPTUX()
 {
     float temp;
+    uint16_t time;
 
-    OUTPUT_SERIAL.print("PTUX: ");
+    // deserialize and print the time
+    if (!BufferGetUInt16(&time, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(time/10); // seconds
+    OUTPUT_SERIAL.print('.');
+    OUTPUT_SERIAL.print(time%10); // tenths
+
+    OUTPUT_SERIAL.print("\tPTUX: ");
 
     // deserialize and print P
     if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
@@ -95,8 +102,15 @@ bool LoRaSondeGround::PrintGPS()
 {
     float temp;
     uint8_t temp_u;
+    uint16_t time;
 
-    OUTPUT_SERIAL.print("GPS: ");
+    // deserialize and print the time
+    if (!BufferGetUInt16(&time, rx_buf, receive_size, &rx_index)) return false;
+    OUTPUT_SERIAL.print(time/10); // seconds
+    OUTPUT_SERIAL.print('.');
+    OUTPUT_SERIAL.print(time%10); // tenths
+
+    OUTPUT_SERIAL.print("\tGPS: ");
 
     // deserialize and print lat
     if (!BufferGetFloat(&temp, rx_buf, receive_size, &rx_index)) return false;
@@ -115,22 +129,22 @@ bool LoRaSondeGround::PrintGPS()
 
     // deserialize and print qual
     if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
-    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(temp_u);
     OUTPUT_SERIAL.print(", ");
 
     // deserialize and print hours
     if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
-    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(temp_u);
     OUTPUT_SERIAL.print(":");
 
     // deserialize and print minutes
     if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
-    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(temp_u);
     OUTPUT_SERIAL.print(":");
 
     // deserialize and print seconds
     if (!BufferGetUInt8(&temp_u, rx_buf, receive_size, &rx_index)) return false;
-    OUTPUT_SERIAL.print(temp);
+    OUTPUT_SERIAL.print(temp_u);
     OUTPUT_SERIAL.println("\r");
 
     return true;

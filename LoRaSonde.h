@@ -19,7 +19,7 @@
 #include <Arduino.h>
 
 // choose the serial ports for each stream
-#define INST_SERIAL Serial1
+#define INST_SERIAL SerialUSB
 #define IMET_SERIAL Serial2
 
 // we need to configure the SERCOM module for the iMet serial

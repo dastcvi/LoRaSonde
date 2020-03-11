@@ -67,6 +67,7 @@ enum LoRaSpreadingFactor_t : uint8_t {
 
 // iMet PTUX
 struct PTUX_t {
+    uint16_t deciseconds;
     float p;
     float t;
     float u;
@@ -75,6 +76,7 @@ struct PTUX_t {
 
 // iMet GPS
 struct GPS_t {
+    uint16_t deciseconds;
     float lat;
     float lon;
     float alt;

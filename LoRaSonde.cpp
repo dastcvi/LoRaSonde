@@ -74,7 +74,7 @@ bool LoRaSonde::ListenInstrument()
     if ('x' != (header[0] = INST_SERIAL.read())) return false;
 
     // listen for the rest of the header "xdata="
-    timeout = millis() + 200;
+    timeout = millis() + 250;
     for (int i = 1; i < 6; i++) {
         while (!INST_SERIAL.available()) {
             if (millis() > timeout) {
@@ -93,16 +93,16 @@ bool LoRaSonde::ListenInstrument()
     }
 
     // get the message
-    while ('\r' != (char) INST_SERIAL.peek() && '\n' != (char) INST_SERIAL.peek()) {
-        if (millis() > timeout) {
-            INST_SERIAL.flush();
-            return false;
-        }
+    while (millis() <= timeout) {
+        if (!INST_SERIAL.available()) continue;
 
-        if (INST_SERIAL.available()) {
-            ascii_buf[xdata_len++] = (char) INST_SERIAL.read();
-        }
+        if ('\r' == (char) INST_SERIAL.peek() || '\n' == (char) INST_SERIAL.peek()) break;
+
+        ascii_buf[xdata_len++] = (char) INST_SERIAL.read();
     }
+
+    // make sure we got the end character
+    if ('\r' != (char) INST_SERIAL.peek() && '\n' != (char) INST_SERIAL.peek()) return false;
 
     // make sure we have an even number of bytes in the packet
     if (0 != xdata_len % 2) {
